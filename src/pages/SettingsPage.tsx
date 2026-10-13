@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Download, Upload } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { CloudSyncSection } from '../components/CloudSyncSection';
 import type { MotivationStyle, ThemeAccent } from '../types';
 
 const AVATARS = ['🦸', '🧙', '🧝', '🧜', '🤸', '🦊', '🐺', '🦁', '🐉', '🌟', '⚡', '🔥'];
@@ -167,11 +168,16 @@ export function SettingsPage() {
         </div>
       </Section>
 
+      {/* Cloud sync */}
+      <Section title="Cloud Sync">
+        <CloudSyncSection />
+      </Section>
+
       {/* Data */}
       <Section title="Your Data">
         <p className="text-white/40 text-xs mb-4">
-          Your progress is stored only on this device. Export a backup regularly so you can restore it
-          if you clear browser data or switch devices.
+          Without cloud sync your progress is stored only on this device. Export a backup now and then
+          so you can restore it if you clear browser data.
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-primary py-2 px-3 text-sm" onClick={handleExport}>

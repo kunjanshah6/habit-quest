@@ -21,7 +21,16 @@ import {
 } from '../lib/streaks';
 import { ACHIEVEMENTS } from '../lib/achievements';
 import { nanoid } from '../lib/nanoid';
-import { DEFAULT_SETTINGS, DEFAULT_STREAK_SHIELDS, sanitizePersisted, serializeBackup, parseBackup } from '../lib/persistence';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_STREAK_SHIELDS,
+  canonicalize,
+  mergeData,
+  sanitizePersisted,
+  serializeBackup,
+  parseBackup,
+} from '../lib/persistence';
+import type { PersistedData } from '../lib/persistence';
 
 export interface AppStore {
   // Data
@@ -37,6 +46,9 @@ export interface AppStore {
   showAddHabit: boolean;
   totalXP: number;
   streakShields: number;
+  /** Sync bookkeeping, see PersistedData. */
+  epoch: number;
+  settingsUpdatedAt: number;
 
   // Actions
   setActivePage: (page: NavPage) => void;
@@ -54,8 +66,12 @@ export interface AppStore {
   /** Replace all user data from a previously exported backup JSON string.
    *  Returns null on success, or an error message string on failure. */
   importData: (json: string) => string | null;
-  /** Permanently wipe all user data and reset to defaults. */
+  /** Permanently wipe all user data and reset to defaults. Propagates to synced devices. */
   resetAllData: () => void;
+  /** Merge data coming from the cloud into the local state. No-op if nothing changes. */
+  applyMerged: (data: PersistedData, opts?: { ignoreEpoch?: boolean }) => void;
+  /** Empty this device (used on sign-out). Unlike resetAllData this is NOT propagated. */
+  clearLocalData: () => void;
 
   // Derived (computed on the fly via selectors)
 }
@@ -126,6 +142,8 @@ export const useStore = create<AppStore>()(
       showAddHabit: false,
       totalXP: 0,
       streakShields: DEFAULT_STREAK_SHIELDS,
+      epoch: 0,
+      settingsUpdatedAt: 0,
 
       setActivePage: (page) => set({ activePage: page }),
       setSelectedHabit: (habitId) => set({ selectedHabitId: habitId }),
@@ -252,7 +270,10 @@ export const useStore = create<AppStore>()(
       },
 
       updateSettings: (settings) => {
-        set((state) => ({ settings: { ...state.settings, ...settings } }));
+        set((state) => ({
+          settings: { ...state.settings, ...settings },
+          settingsUpdatedAt: Date.now(),
+        }));
       },
 
       useStreakShield: (habitId) => {
@@ -280,21 +301,12 @@ export const useStore = create<AppStore>()(
         }
       },
 
-      exportData: () => {
-        const state = get();
-        return serializeBackup({
-          habits: state.habits,
-          completions: state.completions,
-          userAchievements: state.userAchievements,
-          settings: state.settings,
-          totalXP: state.totalXP,
-          streakShields: state.streakShields,
-        });
-      },
+      exportData: () => serializeBackup(selectPersistedData(get())),
 
       importData: (json) => {
         try {
           const data = parseBackup(json);
+          const now = Date.now();
           set({
             habits: data.habits,
             completions: data.completions,
@@ -302,6 +314,9 @@ export const useStore = create<AppStore>()(
             settings: data.settings,
             totalXP: data.totalXP,
             streakShields: data.streakShields,
+            // A new epoch makes this import replace (not merge with) data on other devices.
+            epoch: now,
+            settingsUpdatedAt: now,
             activePage: 'today',
             celebration: null,
             selectedHabitId: null,
@@ -314,6 +329,7 @@ export const useStore = create<AppStore>()(
       },
 
       resetAllData: () => {
+        const now = Date.now();
         set({
           habits: [],
           completions: [],
@@ -321,6 +337,42 @@ export const useStore = create<AppStore>()(
           settings: DEFAULT_SETTINGS,
           totalXP: 0,
           streakShields: DEFAULT_STREAK_SHIELDS,
+          epoch: now,
+          settingsUpdatedAt: now,
+          activePage: 'today',
+          celebration: null,
+          selectedHabitId: null,
+          showAddHabit: false,
+        });
+      },
+
+      applyMerged: (incoming, opts) => {
+        const local = selectPersistedData(get());
+        const merged = mergeData(local, incoming, opts);
+        if (canonicalize(merged) === canonicalize(local)) return;
+        set({
+          habits: merged.habits,
+          completions: merged.completions,
+          userAchievements: merged.userAchievements,
+          settings: merged.settings,
+          totalXP: merged.totalXP,
+          streakShields: merged.streakShields,
+          epoch: merged.epoch,
+          settingsUpdatedAt: merged.settingsUpdatedAt,
+        });
+      },
+
+      clearLocalData: () => {
+        set({
+          habits: [],
+          completions: [],
+          userAchievements: [],
+          settings: DEFAULT_SETTINGS,
+          totalXP: 0,
+          streakShields: DEFAULT_STREAK_SHIELDS,
+          // epoch 0: an emptied device must never beat real data in the cloud.
+          epoch: 0,
+          settingsUpdatedAt: 0,
           activePage: 'today',
           celebration: null,
           selectedHabitId: null,
@@ -341,10 +393,24 @@ export const useStore = create<AppStore>()(
         settings: state.settings,
         totalXP: state.totalXP,
         streakShields: state.streakShields,
+        epoch: state.epoch,
+        settingsUpdatedAt: state.settingsUpdatedAt,
       }),
     }
   )
 );
+
+/** The slice of state that is saved locally, exported, and synced to the cloud. */
+export const selectPersistedData = (state: AppStore): PersistedData => ({
+  habits: state.habits,
+  completions: state.completions,
+  userAchievements: state.userAchievements,
+  settings: state.settings,
+  totalXP: state.totalXP,
+  streakShields: state.streakShields,
+  epoch: state.epoch,
+  settingsUpdatedAt: state.settingsUpdatedAt,
+});
 
 // Selectors
 export const selectActiveHabits = (state: AppStore) =>

@@ -241,6 +241,90 @@ describe('export / import / reset', () => {
   });
 });
 
+describe('sync support', () => {
+  it('updateSettings stamps settingsUpdatedAt', () => {
+    expect(useStore.getState().settingsUpdatedAt).toBe(NOW.getTime()); // set by resetAllData in beforeEach
+    vi.setSystemTime(NOW.getTime() + 5000);
+    useStore.getState().updateSettings({ name: 'Sam' });
+    expect(useStore.getState().settingsUpdatedAt).toBe(NOW.getTime() + 5000);
+  });
+
+  it('resetAllData and importData start a new epoch so they propagate to other devices', () => {
+    vi.setSystemTime(NOW.getTime() + 1000);
+    useStore.getState().resetAllData();
+    expect(useStore.getState().epoch).toBe(NOW.getTime() + 1000);
+
+    const json = useStore.getState().exportData();
+    vi.setSystemTime(NOW.getTime() + 2000);
+    expect(useStore.getState().importData(json)).toBeNull();
+    expect(useStore.getState().epoch).toBe(NOW.getTime() + 2000);
+  });
+
+  it('clearLocalData empties the device with epoch 0 so it cannot wipe the cloud', () => {
+    useStore.getState().addHabit(newHabit());
+    useStore.getState().clearLocalData();
+    const s = useStore.getState();
+    expect(s.habits).toHaveLength(0);
+    expect(s.epoch).toBe(0);
+    expect(s.settingsUpdatedAt).toBe(0);
+  });
+
+  it('applyMerged brings in habits and XP from another device', () => {
+    useStore.getState().addHabit(newHabit({ name: 'Local' }));
+    useStore.getState().clearLocalData();
+    useStore.getState().addHabit(newHabit({ name: 'Local' }));
+
+    useStore.getState().applyMerged({
+      habits: [
+        {
+          id: 'h_remote',
+          userId: 'u',
+          name: 'Remote',
+          icon: 'x',
+          category: 'Health',
+          difficulty: 'easy',
+          frequency: 'daily',
+          xpReward: 10,
+          createdAt: '2024-06-01',
+          color: '#fff',
+        },
+      ],
+      completions: [],
+      userAchievements: [],
+      settings: useStore.getState().settings,
+      totalXP: 40,
+      streakShields: 1,
+      epoch: 0,
+      settingsUpdatedAt: 0,
+    });
+
+    const s = useStore.getState();
+    expect(s.habits.map((h) => h.name).sort()).toEqual(['Local', 'Remote']);
+    expect(s.totalXP).toBe(40);
+    expect(s.streakShields).toBe(1);
+  });
+
+  it('applyMerged is a no-op when the data is identical (no sync echo loop)', () => {
+    useStore.getState().addHabit(newHabit());
+    const before = useStore.getState();
+    const snapshot = {
+      habits: before.habits,
+      completions: before.completions,
+      userAchievements: before.userAchievements,
+      settings: before.settings,
+      totalXP: before.totalXP,
+      streakShields: before.streakShields,
+      epoch: before.epoch,
+      settingsUpdatedAt: before.settingsUpdatedAt,
+    };
+    let changes = 0;
+    const unsub = useStore.subscribe(() => changes++);
+    useStore.getState().applyMerged({ ...snapshot, habits: [...snapshot.habits] });
+    unsub();
+    expect(changes).toBe(0);
+  });
+});
+
 describe('persist migration', () => {
   it('upgrades a v3 payload that has no streakShields', async () => {
     const v3 = {
