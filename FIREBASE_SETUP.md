@@ -49,8 +49,12 @@ Vite reads `VITE_*` variables **at build time**, so they must exist when the sit
 
 - **Local development:** create a `.env.local` file (it is git-ignored) with the four
   variables above, then run `npm run dev`.
-- **Render (Static Site):** **Environment -> Add Environment Variable** for each of the four
-  variables, then redeploy. Changing them later needs a new build.
+- **Production builds (Render):** the values are committed in [`.env.production`](.env.production),
+  which Vite loads automatically for `npm run build`, so Render needs no environment variables.
+  They are public identifiers (they end up in the shipped JavaScript anyway); the Firestore
+  rules from step 3 are what protect the data. To point production at a different Firebase
+  project, edit that file or set the same variables in Render, which take precedence.
+  Changing them needs a new build.
 
 ## 7. Use it
 
