@@ -1,0 +1,33 @@
+# Render Blueprint: describes the static site so deploys don't depend on dashboard settings.
+# In Render: New -> Blueprint -> pick this repo. For an existing service, copy the same
+# values into its Settings (build command, publish directory, rewrite, NODE_VERSION).
+services:
+  - type: web
+    runtime: static
+    name: habit-quest
+    branch: main
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      # Vite 8 and Vitest need Node 20.19+ or 22.12+.
+      - key: NODE_VERSION
+        value: 22
+    routes:
+      # SPA fallback so refreshing the page doesn't return a 404.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
