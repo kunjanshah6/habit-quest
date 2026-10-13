@@ -6,11 +6,17 @@ import {
 import { useStore } from '../store/useStore';
 import type { NavPage } from '../types';
 
-const NAV_ITEMS: { id: NavPage; label: string; icon: ComponentType<{ size?: number; className?: string }> }[] = [
+const NAV_ITEMS: {
+  id: NavPage;
+  label: string;
+  /** Shorter text for the 6-item mobile bar, where "Achievements" doesn't fit. */
+  mobileLabel?: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+}[] = [
   { id: 'today', label: 'Today', icon: Home },
   { id: 'insights', label: 'Insights', icon: BarChart2 },
   { id: 'history', label: 'History', icon: Calendar },
-  { id: 'achievements', label: 'Achievements', icon: Trophy },
+  { id: 'achievements', label: 'Achievements', mobileLabel: 'Badges', icon: Trophy },
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -100,18 +106,16 @@ export function Sidebar() {
 export function BottomNav() {
   const { activePage, setActivePage } = useStore();
 
-  const mobileItems = NAV_ITEMS.slice(0, 5);
-
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface-800/95 backdrop-blur-md border-t border-white/5">
-      <div className="flex items-center justify-around px-2 py-1 safe-area-inset-bottom">
-        {mobileItems.map(({ id, label, icon: Icon }) => {
+      <div className="flex items-center justify-around px-1 py-1 safe-area-inset-bottom">
+        {NAV_ITEMS.map(({ id, label, mobileLabel, icon: Icon }) => {
           const active = activePage === id;
           return (
             <button
               key={id}
               onClick={() => setActivePage(id)}
-              className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl min-w-[56px] transition-all duration-150 ${
+              className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-xl flex-1 min-w-0 transition-all duration-150 ${
                 active ? 'text-brand-400' : 'text-white/40'
               }`}
               aria-label={label}
@@ -123,7 +127,7 @@ export function BottomNav() {
               >
                 <Icon size={20} />
               </motion.div>
-              <span className="text-[10px] font-medium">{label}</span>
+              <span className="text-[10px] font-medium max-w-full truncate">{mobileLabel ?? label}</span>
               {active && (
                 <motion.div
                   layoutId="bottom-nav-dot"
