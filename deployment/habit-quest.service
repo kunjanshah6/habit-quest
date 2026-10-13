@@ -1,0 +1,25 @@
+[Unit]
+Description=HabitQuest Backend Application Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/var/www/habit-quest
+EnvironmentFile=-/var/www/habit-quest/.env
+ExecStart=/var/www/habit-quest/scripts/start-production.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=habitquest
+
+# Security Sandboxing
+ProtectSystem=full
+ProtectHome=read-only
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
